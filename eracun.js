@@ -47,6 +47,11 @@ function davcnaStopnja(izvajalec, zanr) {
 
 // Prikaz seznama pesmi na strani
 streznik.get('/', function(zahteva, odgovor) {
+  var session=zahteva.expressSession;
+  if(zahteva.session.Username==null){
+    odgovor.redirect('/prijava');
+    return;
+  }
   pb.all("SELECT Track.TrackId AS id, Track.Name AS pesem, \
           Artist.Name AS izvajalec, Track.UnitPrice * " +
           razmerje_usd_eur + " AS cena, \
@@ -151,9 +156,20 @@ streznik.post('/izpisiRacunBaza', function(zahteva, odgovor) {
   odgovor.end();
 })
 
+var vrniPodatke=function(customer, callback){
+  pb.all("SELECT * FROM Customer WHERE Customer.CustomerId="+customer, function(napaka, vrstice) {
+      callback(napaka,vrstice);
+  })
+}
+
 // Izpis računa v HTML predstavitvi ali izvorni XML obliki
 streznik.get('/izpisiRacun/:oblika', function(zahteva, odgovor) {
+  if(zahteva.session.Username==null){
+    odgovor.redirect('/prijava');
+    return;
+  }
   pesmiIzKosarice(zahteva, function(pesmi) {
+    vrniPodatke(zahteva.session.Username,function(napaka,stranka){
     if (!pesmi) {
       odgovor.sendStatus(500);
     } else if (pesmi.length == 0) {
@@ -163,9 +179,10 @@ streznik.get('/izpisiRacun/:oblika', function(zahteva, odgovor) {
       odgovor.setHeader('content-type', 'text/xml');
       odgovor.render('eslog', {
         vizualiziraj: zahteva.params.oblika == 'html' ? true : false,
-        postavkeRacuna: pesmi
+        postavkeRacuna: pesmi, strankaPodatki: stranka
       })  
     }
+  })
   })
 })
 
@@ -233,12 +250,15 @@ streznik.post('/stranka', function(zahteva, odgovor) {
   var form = new formidable.IncomingForm();
   
   form.parse(zahteva, function (napaka1, polja, datoteke) {
+    zahteva.session.Username=polja.seznamStrank;
     odgovor.redirect('/')
   });
 })
 
 // Odjava stranke
 streznik.post('/odjava', function(zahteva, odgovor) {
+    zahteva.session.kosarica=[];
+    zahteva.session.Username=null;
     odgovor.redirect('/prijava') 
 })
 
